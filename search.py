@@ -1,5 +1,5 @@
 import sys
-import dfs
+from search_algorithms import SearchAlgorithms
 
 def open_file(fname):
   graph = {
@@ -66,9 +66,17 @@ def open_file(fname):
 if __name__ == "__main__":
   filename = sys.argv[1]
   method = sys.argv[2]
+  number_of_nodes = 0
+  path = []
   graph = open_file(filename)
 
+
+  searcher = SearchAlgorithms(graph)
+
   if method == "dfs":
-    dfs.DFS.hello_world(None)
-  elif method == "binary":
-    pass
+    [number_of_nodes, path] = searcher.dfs()
+  elif method == "bfs":
+    [number_of_nodes, path, goal] = searcher.bfs()
+
+  print("Finished execution of search.py")
+  print(f"Results: \n\n Filename: search.py \n Method: {method} \n Goal: {goal} \n Number of Nodes: {number_of_nodes} \n Path: {path}")
