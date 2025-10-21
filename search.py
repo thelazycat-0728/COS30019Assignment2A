@@ -75,18 +75,15 @@ def open_file(fname):
 if __name__ == "__main__":
     filename = sys.argv[1]
     method = sys.argv[2]      
-    number_of_nodes = 0
-    path = []
 
-
-   
     graph = open_file(filename)
+    
     print(graph)
 
     searcher = SearchAlgorithms(graph)
 
     if method == "dfs":
-      [number_of_nodes, path] = searcher.dfs()
+      [number_of_nodes, path, goal] = searcher.dfs()
     elif method == "bfs":
       [number_of_nodes, path, goal] = searcher.bfs()
     
