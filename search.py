@@ -78,8 +78,6 @@ if __name__ == "__main__":
 
     graph = open_file(filename)
     
-    print(graph)
-
     searcher = SearchAlgorithms(graph)
 
     if method == "dfs":
@@ -92,4 +90,4 @@ if __name__ == "__main__":
         path = "Not found"
         
     print("Finished execution of search.py")
-    print(f"Results: \n\n Filename: search.py \n Method: {method} \n Goal: {goal} \n Number of Nodes: {number_of_nodes} \n Path: {path}")
+    print(f"Results: \n\n Filename: {filename} \n Method: {method} \n Goal: {goal} \n Number of Nodes: {number_of_nodes} \n Path: {path}")

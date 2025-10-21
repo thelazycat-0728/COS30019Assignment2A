@@ -5,6 +5,8 @@ class SearchAlgorithms:
         self.graph = graph
 
     def bfs(self):
+
+        # change this...
         start = self.graph['origin']
         goals = set(self.graph['destinations'])
         visited = set()
@@ -15,11 +17,15 @@ class SearchAlgorithms:
             return [number_of_nodes, [start], start]
         
         
+        
+        
         queue = deque([(start, [start])])  # (current_node, path_to_current_node)
 
         while queue:
             current_node, path = queue.popleft()
-           
+        
+            if (current_node in goals):
+                return [number_of_nodes, path, current_node]  # Return the path to the goal
         
             # Use adjacency list instead of edges dictionary
             for neighbor, cost in self.graph['adjacency_list'][current_node]:
@@ -28,9 +34,6 @@ class SearchAlgorithms:
                     number_of_nodes += 1
                     
                     new_path = path + [neighbor]
-
-                    if neighbor in goals:
-                        return [number_of_nodes, new_path, neighbor]  # Return the path to the goal
                     
                     queue.append((neighbor, new_path))
 
@@ -69,3 +72,6 @@ class SearchAlgorithms:
                     stack.append((neighbor, new_path))
 
         return [number_of_nodes, None, None]  # No path found
+    
+    def bidirectional_search(self):
+        pass  # Placeholder for future implementation
