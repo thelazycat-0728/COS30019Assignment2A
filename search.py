@@ -77,6 +77,8 @@ if __name__ == "__main__":
     method = sys.argv[2]      
 
     graph = open_file(filename)
+
+    print(graph)
     
     searcher = SearchAlgorithms(graph)
 
@@ -84,7 +86,8 @@ if __name__ == "__main__":
       [number_of_nodes, path, goal] = searcher.dfs()
     elif method == "bfs":
       [number_of_nodes, path, goal] = searcher.bfs()
-    
+    elif method == "dijkstra":
+        [number_of_nodes, path, goal] = searcher.dijkstra()
 
     if path is None:
         path = "Not found"
