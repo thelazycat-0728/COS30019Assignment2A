@@ -73,14 +73,19 @@ def open_file(fname):
     return graph
 
 if __name__ == "__main__":
+
+    if len(sys.argv) != 3:
+        raise SystemExit("Usage: python search.py <filename> <method>")
+    
     filename = sys.argv[1]
     method = sys.argv[2]      
 
     graph = open_file(filename)
-
-    print(graph)
     
     searcher = SearchAlgorithms(graph)
+    print(graph)
+
+    # spelling must be correct ya... (or else it won't run :D)
 
     if method == "dfs":
       [number_of_nodes, path, goal] = searcher.dfs()
@@ -88,6 +93,13 @@ if __name__ == "__main__":
       [number_of_nodes, path, goal] = searcher.bfs()
     elif method == "dijkstra":
         [number_of_nodes, path, goal] = searcher.dijkstra()
+    elif method == "gbfs":
+        [number_of_nodes, path, goal] = searcher.gbfs()
+    elif method == "A*":
+        [number_of_nodes, path, goal] = searcher.astar()
+    else:
+        raise SystemExit(f"Unknown method: {method}")
+
 
     if path is None:
         path = "Not found"
