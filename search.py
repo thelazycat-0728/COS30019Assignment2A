@@ -83,7 +83,6 @@ if __name__ == "__main__":
     graph = open_file(filename)
     
     searcher = SearchAlgorithms(graph)
-    print(graph)
 
     # spelling must be correct ya... (or else it won't run :D)
 

@@ -156,8 +156,6 @@ class SearchAlgorithms:
         visited = set()
 
         while priority_queue:
-
-            print(priority_queue)
             _f, _h, _counter, node, path = heapq.heappop(priority_queue)
             if node in visited: 
                 continue
