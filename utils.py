@@ -1,7 +1,11 @@
 import math
 
 def make_heuristics(coords, goals):
-  goal_pts = [coords[goal] for goal in goals]
+  try:
+      goal_pts = [coords[goal] for goal in goals]
+  except KeyError as e:
+      raise SystemExit(f"Goal node {e.args[0]} not found in coordinates.") from e
+
   def h(n):
       # n is the current node's coordinates
       (x,y) = coords[n]
