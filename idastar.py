@@ -2,8 +2,8 @@ from search_algorithms import SearchAlgorithms
 from utils import make_heuristics
 import math
 
-
-class IDAStar(SearchAlgorithms):
+# IDA* Algorithm Implementation
+class CUS2(SearchAlgorithms):
     def __init__(self, graph):
         super().__init__(graph)
         self.total_generated_nodes = 0
@@ -12,21 +12,22 @@ class IDAStar(SearchAlgorithms):
     def iterate(self, node, g, bound, path, visited):
         """Recursive DFS with f-cost bound"""
         f = g + self.h(node)
+
         
         # Exceeds bound - return new threshold
         if f > bound:
             return f, None, None
         
-        # Goal found
-        if node in self.goals:
-            return True, node, path
-        
+      
         min_excess = math.inf
         
         # Explore neighbors
         for neighbor, cost in self.graph['adjacency_list'][node]:
             if neighbor in visited:
                 continue
+            
+            if neighbor in self.goals:
+                return [True, neighbor, path + [neighbor]]
             
             visited.add(neighbor)
             self.total_generated_nodes += 1
@@ -57,8 +58,15 @@ class IDAStar(SearchAlgorithms):
         bound = self.h(self.start)
         self.total_generated_nodes = 1
         path = [self.start]
+
+        if self.start in self.goals:
+            return [self.total_generated_nodes, path, self.start]
         
         while True:
+            
+            if self.total_generated_nodes != 1:
+                self.total_generated_nodes += 1
+            
             visited = {self.start}
             
             outcome, goal_node, goal_path = self.iterate(

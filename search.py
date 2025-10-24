@@ -1,11 +1,10 @@
 import sys
-from search_algorithms import SearchAlgorithms
 from bfs import BFS
 from dfs import DFS
-from dijkstra import Dijkstra
+from dijkstra import CUS1
 from gbfs import GBFS
-from astar import AStar
-from idastar import IDAStar
+from astar import AS
+from idastar import CUS2
 
 def open_file(fname):
     graph = {
@@ -87,17 +86,20 @@ if __name__ == "__main__":
     method = sys.argv[2]      
 
     graph = open_file(filename)
+    print(graph)
     
     algorithm_map = {
         'bfs': BFS,
         'dfs': DFS,
-        'dijkstra': Dijkstra,
+        'dijkstra': CUS1,
         'gbfs': GBFS,
-        'astar': AStar,
-        'a*': AStar,
-        'idastar': IDAStar,
-        'ida*': IDAStar
+        'astar': AS,
+        'a*': AS,
+        'idastar': CUS2,
+        'ida*': CUS2
     }
+
+
 
     # spelling must be correct ya... (or else it won't run :D)
     try:
@@ -115,4 +117,4 @@ if __name__ == "__main__":
         path = "Not found"
         
     print("Finished execution of search.py")
-    print(f"Results: \n\n Filename: {filename} \n Method: {method} \n Goal: {goal} \n Number of Nodes: {number_of_nodes} \n Path: {path}")
+    print(f"Results: \n\n Filename: {filename} \n Method: {algorithm_map[method].__name__} \n Goal: {goal} \n Number of Nodes: {number_of_nodes} \n Path: {path}")

@@ -4,7 +4,7 @@ import heapq
 from utils import make_heuristics
 import math
 
-class AStar(SearchAlgorithms):
+class AS(SearchAlgorithms):
     def search(self):
         h = make_heuristics(self.coords, self.goals)
         g_cost = defaultdict(lambda: math.inf)

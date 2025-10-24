@@ -13,6 +13,7 @@ class BFS(SearchAlgorithms):
         queue = deque([(self.start, [self.start])])  # (current_node, path_to_current_node)
 
         while queue:
+            print(queue)
             current_node, path = queue.popleft()
 
             if (current_node in self.goals):

@@ -3,7 +3,8 @@ import heapq
 from collections import defaultdict
 import math
 
-class Dijkstra(SearchAlgorithms):
+# Dijkstra's Algorithm Implementation
+class CUS1(SearchAlgorithms):
   def search(self):
     visited = set()
     number_of_nodes = 1  # Count the origin node
