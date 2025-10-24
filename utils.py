@@ -1,5 +1,6 @@
 import math
 
+# for greedy best-first search, A* and IDA*
 def make_heuristics(coords, goals):
   try:
       goal_pts = [coords[goal] for goal in goals]

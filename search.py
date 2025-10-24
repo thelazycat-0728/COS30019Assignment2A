@@ -1,5 +1,11 @@
 import sys
 from search_algorithms import SearchAlgorithms
+from bfs import BFS
+from dfs import DFS
+from dijkstra import Dijkstra
+from gbfs import GBFS
+from astar import AStar
+from idastar import IDAStar
 
 def open_file(fname):
     graph = {
@@ -82,21 +88,26 @@ if __name__ == "__main__":
 
     graph = open_file(filename)
     
-    searcher = SearchAlgorithms(graph)
+    algorithm_map = {
+        'bfs': BFS,
+        'dfs': DFS,
+        'dijkstra': Dijkstra,
+        'gbfs': GBFS,
+        'astar': AStar,
+        'a*': AStar,
+        'idastar': IDAStar,
+        'ida*': IDAStar
+    }
 
     # spelling must be correct ya... (or else it won't run :D)
+    try:
+        searcher = algorithm_map[method](graph)
+    except KeyError:
+        raise SystemExit(f"Unknown method: {method}")
+    
+    number_of_nodes, path, goal = searcher.search() 
 
-    if method == "dfs":
-      [number_of_nodes, path, goal] = searcher.dfs()
-    elif method == "bfs":
-      [number_of_nodes, path, goal] = searcher.bfs()
-    elif method == "dijkstra":
-        [number_of_nodes, path, goal] = searcher.dijkstra()
-    elif method == "gbfs":
-        [number_of_nodes, path, goal] = searcher.gbfs()
-    elif method == "A*":
-        [number_of_nodes, path, goal] = searcher.astar()
-    else:
+    if method not in algorithm_map:
         raise SystemExit(f"Unknown method: {method}")
 
 
