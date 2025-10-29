@@ -4,10 +4,11 @@ class SearchAlgorithms:
         self.start = graph['origin']
         self.goals = set(graph['destinations'])
         self.coords = graph['nodes']
+        self.frontier = [self.start]
 
 
     def search(self):
         raise NotImplementedError("This method should be overridden by subclasses.")
+    
 
-
-
+ 

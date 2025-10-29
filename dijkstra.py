@@ -5,7 +5,7 @@ import math
 
 # Dijkstra's Algorithm Implementation
 class CUS1(SearchAlgorithms):
-  def search(self):
+  def search(self, step_callback=None):
     visited = set()
     number_of_nodes = 1  # Count the origin node
     distances = defaultdict(lambda: math.inf)
@@ -17,22 +17,39 @@ class CUS1(SearchAlgorithms):
     while min_heap:
         cost, _counter, current_node, path = heapq.heappop(min_heap)
 
-        if current_node in self.goals:
-            visited.add(current_node)
-            return [number_of_nodes, path, current_node]  # Return the path to the goal
+        is_goal = current_node in self.goals
+
+        # If goal is found, return immediately after showing the solution
+        if is_goal:
+            for node in min_heap:
+                if node[2] not in self.frontier:
+                    self.frontier.append(node[2])
+
+            step_callback(current_node, path, self.frontier, visited, is_goal)
+            return [number_of_nodes, path, current_node]
 
         if current_node not in visited:
             
             visited.add(current_node)
+            
+            self.frontier.remove(current_node)
 
             for neighbor, edge_cost in self.graph['adjacency_list'][current_node]:
                 if neighbor not in visited:
-                    number_of_nodes += 1
+                    
                     new_cost = cost + edge_cost
                     if new_cost < distances[neighbor]:
+                        number_of_nodes += 1
                         new_path = path + [neighbor]
                         distances[neighbor] = new_cost
                         counter += 1
                         heapq.heappush(min_heap, (new_cost, counter, neighbor, new_path))
+
+                        for node in min_heap:
+                            if node[2] not in self.frontier:
+                                self.frontier.append(node[2])
+
+                        step_callback(current_node, new_path, self.frontier, visited, is_goal)
+                        
 
     return [number_of_nodes, None, None]  # No path found

@@ -3,34 +3,50 @@ import heapq
 from utils import make_heuristics
 
 class GBFS(SearchAlgorithms):
-  def search(self):
+  def search(self, step_callback=None):
     h = make_heuristics(self.coords, self.goals)
-    priority_queue = []
+    min_heap = []
 
     counter = 0
-    heapq.heappush(priority_queue, (h(self.start), counter, self.start, [self.start]))
+    heapq.heappush(min_heap, (h(self.start), counter, self.start, [self.start]))
     visited = set()
     number_of_nodes = 1
 
     
 
-    while priority_queue:
+    while min_heap:
 
-        _, _counter, node, path = heapq.heappop(priority_queue)
-        
-        visited.add(node)
+        _, _counter, current_node, path = heapq.heappop(min_heap)
 
-        if node in self.goals:
-            return [number_of_nodes, path, node]
+        visited.add(current_node)
+
+        self.frontier.remove(current_node)
+
+        is_goal = current_node in self.goals
+
+        # If goal is found, return immediately after showing the solution
+        if is_goal:
+            for node in min_heap:
+                if node[2] not in self.frontier:
+                    self.frontier.append(node[2])
+
+            step_callback(current_node, path, self.frontier, visited, is_goal)
+            return [number_of_nodes, path, current_node]
         
         # expand neighbors in ascending id
-        for neighbor, cost in self.graph['adjacency_list'][node]:
+        for neighbor, cost in self.graph['adjacency_list'][current_node]:
             if neighbor in visited:
                 continue
 
             new_path = path + [neighbor]
             counter += 1
-            heapq.heappush(priority_queue, (h(neighbor), counter, neighbor, new_path))
+            heapq.heappush(min_heap, (h(neighbor), counter, neighbor, new_path))
             number_of_nodes += 1
+
+            for node in min_heap:
+                if node[2] not in self.frontier:
+                    self.frontier.append(node[2])
+
+                step_callback(current_node, new_path, self.frontier, visited, is_goal)
 
     return [number_of_nodes, None, None]
