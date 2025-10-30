@@ -15,7 +15,7 @@ from idastar import CUS2
 class GUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Search Algorithm Visualizer - Step by Step")
+        self.root.title("Search Algorithm Visualizer")
         self.root.geometry("1600x900")
         
         self.graph = None
@@ -25,6 +25,14 @@ class GUI:
         self.is_paused = False
         self.node_counter = 0
         self.node_ids = {}
+
+        # Tooltip management
+        self.hover_tooltip = None
+        self.hover_timer = None
+        self.fade_timer = None
+        self.tooltip_alpha = 0.0
+        self.current_hover_node = None
+        self.bound = None
         
         self.setup_ui()
     
@@ -71,11 +79,23 @@ class GUI:
         content_frame = ttk.Frame(self.root)
         content_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # Left side - Graph visualization
+        # Left side - Graph visualization with scrollbars
         left_frame = ttk.LabelFrame(content_frame, text="Graph Visualization", padding="10")
         left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
         
-        self.graph_canvas = tk.Canvas(left_frame, bg="white", width=600, height=600)
+        # Add scrollbars for graph canvas
+        graph_scroll_y = ttk.Scrollbar(left_frame, orient=tk.VERTICAL)
+        graph_scroll_x = ttk.Scrollbar(left_frame, orient=tk.HORIZONTAL)
+        
+        self.graph_canvas = tk.Canvas(left_frame, bg="white", width=600, height=600,
+                                      yscrollcommand=graph_scroll_y.set,
+                                      xscrollcommand=graph_scroll_x.set)
+        
+        graph_scroll_y.config(command=self.graph_canvas.yview)
+        graph_scroll_x.config(command=self.graph_canvas.xview)
+        
+        graph_scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
+        graph_scroll_x.pack(side=tk.BOTTOM, fill=tk.X)
         self.graph_canvas.pack(fill=tk.BOTH, expand=True)
         
         # Right side - Search tree and info
@@ -218,10 +238,30 @@ class GUI:
         scale_y = (canvas_height - 2 * padding) / (max_y - min_y) if max_y != min_y else 1
         scale = min(scale_x, scale_y)
         
+        # Calculate actual drawing area needed
+        drawing_width = (max_x - min_x) * scale + 2 * padding
+        drawing_height = (max_y - min_y) * scale + 2 * padding
+        
+        # Make canvas larger if needed, but at least the window size
+        scroll_width = max(canvas_width, drawing_width)
+        scroll_height = max(canvas_height, drawing_height)
+        
+        # Set scroll region
+        self.graph_canvas.config(scrollregion=(0, 0, scroll_width, scroll_height))
+        
         def transform(x, y):
             tx = padding + (x - min_x) * scale
-            ty = canvas_height - (padding + (y - min_y) * scale)
+            ty = scroll_height - (padding + (y - min_y) * scale)
             return tx, ty
+        
+        # Helper function to check if edge is bidirectional
+        def is_bidirectional(from_node, to_node):
+            """Check if there's a reverse edge"""
+            if to_node in self.graph['adjacency_list']:
+                for neighbor, _ in self.graph['adjacency_list'][to_node]:
+                    if neighbor == from_node:
+                        return True
+            return False
         
         # Draw solution path edges first (if available)
         if highlight_path:
@@ -230,20 +270,174 @@ class GUI:
                 to_node = highlight_path[i + 1]
                 x1, y1 = transform(*nodes[from_node])
                 x2, y2 = transform(*nodes[to_node])
-                self.graph_canvas.create_line(x1, y1, x2, y2, arrow=tk.LAST,
-                                             fill="yellow", width=4)
-  
+                
+                # Calculate direction vector
+                dx = x2 - x1
+                dy = y2 - y1
+                length = (dx**2 + dy**2)**0.5
+                
+                r = 22
+                
+                if length > 0:
+                    ux = dx / length
+                    uy = dy / length
+                    start_x = x1 + ux * r
+                    start_y = y1 + uy * r
+                    end_x = x2 - ux * r
+                    end_y = y2 - uy * r
+                else:
+                    start_x, start_y = x1, y1
+                    end_x, end_y = x2, y2
+                
+                # Check if bidirectional
+                bidirectional = is_bidirectional(from_node, to_node)
+                
+                if bidirectional:
+                    # No arrow for bidirectional
+                    self.graph_canvas.create_line(start_x, start_y, end_x, end_y,
+                                                 fill="yellow", width=4)
+                else:
+                    # Arrow at 25% point for unidirectional
+                    arrow_x = start_x + (end_x - start_x) * 0.25
+                    arrow_y = start_y + (end_y - start_y) * 0.25
+                    
+                    # Draw line in two parts: before arrow and after arrow
+                    self.graph_canvas.create_line(start_x, start_y, arrow_x, arrow_y,
+                                                 fill="yellow", width=4, arrow=tk.LAST,
+                                                 arrowshape=(10, 12, 5))
+                    self.graph_canvas.create_line(arrow_x, arrow_y, end_x, end_y,
+                                                 fill="yellow", width=4)
         
         # Draw edges
+        drawn_edges = set()  # Track drawn edges to avoid duplicates
+        
         for from_node, neighbors in self.graph['adjacency_list'].items():
             x1, y1 = transform(*nodes[from_node])
             for to_node, cost in neighbors:
+                # Skip if we've already drawn this edge pair
+                if (min(from_node, to_node), max(from_node, to_node)) in drawn_edges:
+                    continue
+                
                 x2, y2 = transform(*nodes[to_node])
-                self.graph_canvas.create_line(x1, y1, x2, y2, arrow=tk.LAST, 
-                                              fill="gray", width=2)
+                
+                # Calculate direction vector
+                dx = x2 - x1
+                dy = y2 - y1
+                length = (dx**2 + dy**2)**0.5
+                
+                # Node radius
+                r = 22
+                
+                # Calculate start and end points (outside the node circles)
+                if length > 0:
+                    # Unit vector
+                    ux = dx / length
+                    uy = dy / length
+                    
+                    # Start point (just outside from_node)
+                    start_x = x1 + ux * r
+                    start_y = y1 + uy * r
+                    
+                    # End point (just at edge of to_node)
+                    end_x = x2 - ux * r
+                    end_y = y2 - uy * r
+                else:
+                    start_x, start_y = x1, y1
+                    end_x, end_y = x2, y2
+                
+                # Check if bidirectional
+                bidirectional = is_bidirectional(from_node, to_node)
+                
+                if bidirectional:
+                    # Draw simple line without arrow for bidirectional edges
+                    self.graph_canvas.create_line(start_x, start_y, end_x, end_y,
+                                                 fill="gray", width=2)
+                    drawn_edges.add((min(from_node, to_node), max(from_node, to_node)))
+                else:
+                    # Arrow at 25% point for unidirectional edges
+                    arrow_x = start_x + (end_x - start_x) * 0.25
+                    arrow_y = start_y + (end_y - start_y) * 0.25
+                    
+                    # Draw line in two parts: before arrow and after arrow
+                    self.graph_canvas.create_line(start_x, start_y, arrow_x, arrow_y,
+                                                 fill="gray", width=2, arrow=tk.LAST,
+                                                 arrowshape=(10, 12, 5))
+                    self.graph_canvas.create_line(arrow_x, arrow_y, end_x, end_y,
+                                                 fill="gray", width=2)
+                
+                # Calculate midpoint for cost label
                 mid_x, mid_y = (x1 + x2) / 2, (y1 + y2) / 2
-                self.graph_canvas.create_text(mid_x, mid_y, text=str(cost), 
-                                             fill="blue", font=("Arial", 9, "bold"))
+                
+                # Calculate perpendicular offset
+                if length > 0:
+                    # Perpendicular vector (rotated 90 degrees)
+                    perp_x = -dy / length
+                    perp_y = dx / length
+                    
+                    # Offset distance from the line
+                    offset = 12
+                    
+                    if bidirectional:
+                        # For bidirectional: show both costs
+                        
+                        text_x_top = mid_x - perp_x * offset
+                        text_y_top = mid_y - perp_y * offset
+                        
+                        label_top = tk.Label(
+                            self.graph_canvas, 
+                            text=str(cost), 
+                            bg="white", 
+                            fg="blue", 
+                            font=("Arial", 9, "bold")
+                        )
+                        self.graph_canvas.create_window(text_x_top, text_y_top, window=label_top)
+                        
+                        
+                        reverse_cost = None
+                        if to_node in self.graph['adjacency_list']:
+                            for neighbor, edge_cost in self.graph['adjacency_list'][to_node]:
+                                if neighbor == from_node:
+                                    reverse_cost = edge_cost
+                                    break
+                        
+                        
+                        if reverse_cost is not None:
+                            text_x_bottom = mid_x + perp_x * offset
+                            text_y_bottom = mid_y + perp_y * offset
+                            
+                            label_bottom = tk.Label(
+                                self.graph_canvas, 
+                                text=str(reverse_cost), 
+                                bg="white", 
+                                fg="blue", 
+                                font=("Arial", 9, "bold")
+                            )
+                            self.graph_canvas.create_window(text_x_bottom, text_y_bottom, window=label_bottom)
+                    else:
+                        # For unidirectional: show single cost
+                        text_x = mid_x + perp_x * offset
+                        text_y = mid_y + perp_y * offset
+                        
+                        label = tk.Label(
+                            self.graph_canvas, 
+                            text=str(cost), 
+                            bg="white", 
+                            fg="blue", 
+                            font=("Arial", 9, "bold")
+                        )
+                        self.graph_canvas.create_window(text_x, text_y, window=label)
+                else:
+                    text_x = mid_x
+                    text_y = mid_y + 12
+                    
+                    label = tk.Label(
+                        self.graph_canvas, 
+                        text=str(cost), 
+                        bg="white", 
+                        fg="blue", 
+                        font=("Arial", 9, "bold")
+                    )
+                    self.graph_canvas.create_window(text_x, text_y, window=label)
         
         # Draw nodes
         for node_id, (x, y) in nodes.items():
@@ -297,6 +491,7 @@ class GUI:
                                           fill=color, outline="black")
             self.graph_canvas.create_text(legend_x + 95, y_offset + 9, text=label, anchor=tk.W,
                                          font=("Arial", 9))
+
     
     def run_search(self):
         if not self.graph:
@@ -337,6 +532,9 @@ class GUI:
         try:
             if algorithm in algorithm_map:
                 searcher = algorithm_map[algorithm](self.graph)
+
+                self.current_bound = None
+
                 
                 # Run with callback
                 number_of_nodes, path, goal = searcher.search(step_callback=self.step_callback)
@@ -355,7 +553,7 @@ class GUI:
             self.root.after(0, self.run_button.config, {"state": tk.NORMAL})
             self.root.after(0, self.pause_button.config, {"state": tk.DISABLED})
     
-    def step_callback(self, current_node, path, frontier, visited, is_goal):
+    def step_callback(self, current_node, neighbor, path, frontier, visited, is_goal, g_cost=None, h_cost=None, bound=None):
         """Called by search algorithm at each step"""
         # Wait if paused
         while self.is_paused and self.is_running:
@@ -374,32 +572,40 @@ class GUI:
             # prepare empty step data to update GUI (clears tree_canvas and redraws graph)
             step_data = {
                 'current_node': None,
+                'neighbor': None,
                 'path': [],
                 'frontier': frontier or [],
                 'visited': visited or set(),
                 'is_goal': False,
-                'tree_data': []
+                'tree_data': [],
+                'g_cost': None,
+                'h_cost': None,
+                'bound': bound
             }
             # update GUI on main thread
             self.root.after(0, self.update_visualization_step, step_data)
             return
         
         # Build tree structure
-        self.build_tree_from_path(path, current_node, is_goal)
+        self.build_tree_from_path(path, current_node, neighbor, is_goal, g_cost, h_cost)
+
         
 
-   
         # Create step data
         step_data = {
             'current_node': current_node,
+            'neighbor': neighbor,
             'path': path,
             'frontier': frontier,
             'visited': visited,
             'is_goal': is_goal,
-            'tree_data': [node.copy() for node in self.search_tree]
+            'tree_data': [node.copy() for node in self.search_tree],
+            'g_cost': g_cost,
+            'h_cost': h_cost,
+            'bound': bound
         }
 
-        
+
         # Update GUI in main thread
         self.root.after(0, self.update_visualization_step, step_data)
         
@@ -408,14 +614,8 @@ class GUI:
     
     # ...existing code...
 
-    def build_tree_from_path(self, path, current_node, is_goal):
+    def build_tree_from_path(self, path, current_node, neighbor, is_goal, g_cost=None, h_cost=None):
         """Build/update search tree from current path"""
-        
-        # First, update all previous 'current' nodes to 'visited' (after expansion)
-        if not is_goal:
-            for tree_node in self.search_tree:
-                if tree_node['state'] == 'current':
-                    tree_node['state'] = 'visited'
         
         # Add nodes in path if not already added
         for i, node in enumerate(path):
@@ -436,29 +636,41 @@ class GUI:
                     state = 'solution'
                 elif node == current_node:
                     state = 'current'  # Currently being expanded
-                elif i < len(path) - 1:  # Nodes before current in path
-                    state = 'visited'
-                else:
+                
+                elif node == neighbor:
                     state = 'frontier'
+                
+
+                node_g = g_cost if node == neighbor else None
+                node_h = h_cost if node == neighbor else None
+
                 
                 self.search_tree.append({
                     'id': node_id,
                     'node': node,
                     'parent': parent_id,
                     'cost': i,
-                    'state': state
+                    'state': state,
+                    'g': node_g,
+                    'h': node_h
                 })
             else:
                 # Update state of existing node
                 node_id = self.node_ids[node_key]
+        
                 for tree_node in self.search_tree:
                     if tree_node['id'] == node_id:
                         if is_goal and node in path:
                             tree_node['state'] = 'solution'
+                        elif i < len(path) - 1:  # Nodes before current in path
+                            tree_node['state'] = 'visited'
                         elif node == current_node:
+                            
                             tree_node['state'] = 'current'  # Currently being expanded
-                        # If this node was previously 'current', it will be changed to 'visited' at the start
-                        break
+                            tree_node['g'] = g_cost
+                            tree_node['h'] = h_cost
+
+                        
         
         # Mark all nodes in solution path when goal is found
         if is_goal:
@@ -466,11 +678,14 @@ class GUI:
                 if node_data['node'] in path:
                     node_data['state'] = 'solution'
 
-# ...existing code...
+
     
     def update_visualization_step(self, step_data):
         """Update GUI with current step"""
         # Update graph
+        if step_data.get('bound') is not None:
+            self.current_bound = step_data['bound']
+
         highlight_path = step_data['path'] if step_data['is_goal'] else None
         self.draw_graph(
             highlight_current=step_data['current_node'],
@@ -497,6 +712,13 @@ class GUI:
         if len(step_data['frontier']) > 10:
             status += f"... (+{len(step_data['frontier']) - 10} more)"
         status += f"\nTree Nodes: {len(step_data['tree_data'])}\n"
+
+        if step_data.get('g_cost') is not None:
+            status += f"g(n): {step_data['g_cost']:.2f}\n"
+        if step_data.get('h_cost') is not None:
+            status += f"h(n): {step_data['h_cost']:.2f}\n"
+        if step_data.get('g_cost') is not None and step_data.get('h_cost') is not None:
+            status += f"f(n): {step_data['g_cost'] + step_data['h_cost']:.2f}\n"
         
         self.status_text.insert(1.0, status)
     
@@ -550,6 +772,22 @@ class GUI:
     
     def draw_search_tree(self):
         if not self.search_tree:
+            # Even if tree is empty, draw bound if it exists (for IDA* between iterations)
+            if self.current_bound is not None and self.algorithm_var.get() == 'idastar':
+                canvas_width = self.tree_canvas.winfo_width() or 800
+                canvas_height = self.tree_canvas.winfo_height() or 600
+                
+                self.tree_canvas.delete("all")
+                
+                # Draw bound label at bottom left
+                bound_text = f"Current Bound: {self.current_bound:.2f}"
+                self.tree_canvas.create_text(
+                    10, canvas_height - 10,
+                    text=bound_text,
+                    font=("Arial", 12, "bold"),
+                    fill="darkred",
+                    anchor=tk.SW
+                )
             return
         
         self.tree_canvas.delete("all")
@@ -609,15 +847,206 @@ class GUI:
                 # Draw node
                 r = 16
                 self.tree_canvas.create_oval(x - r, y - r, x + r, y + r, 
-                                            fill=color, outline="black", width=2)
+                                            fill=color, outline="black", width=2, tags=f"node_{node_data['id']}")
                 self.tree_canvas.create_text(x, y, text=str(node_data['node']), 
-                                            font=("Arial", 9, "bold"))
+                                            font=("Arial", 9, "bold"), tags=(f"node_{node_data['id']}",))
                 
-                # Draw depth
-                if node_data.get('cost') is not None:
-                    self.tree_canvas.create_text(x, y + r + 12, 
-                                                text=f"d={node_data['cost']}", 
-                                                font=("Arial", 7), fill="blue")
+                # Bind hover events
+                self.tree_canvas.tag_bind(f"node_{node_data['id']}", "<Enter>", 
+                                         lambda e, nd=node_data, nx=x, ny=y: self.on_node_enter(e, nd, nx, ny))
+                self.tree_canvas.tag_bind(f"node_{node_data['id']}", "<Leave>", 
+                                         lambda e: self.on_node_leave(e))
+        
+        # Draw IDA* bound at bottom left if applicable
+        if self.current_bound is not None and self.algorithm_var.get() == 'idastar':
+            # Get visible canvas dimensions
+            visible_canvas_height = self.tree_canvas.winfo_height()
+            
+            # Draw bound at bottom left of visible area
+            bound_text = f"Current Bound: {self.current_bound:.2f}"
+            
+            self.tree_canvas.create_text(
+                10, visible_canvas_height - 10,
+                text=bound_text,
+                font=("Arial", 12, "bold"),
+                fill="darkred",
+                anchor=tk.SW
+            )
+    
+    def on_node_enter(self, event, node_data, x, y):
+        """Handle mouse entering a node"""
+        # Cancel any existing fade timer
+        if self.fade_timer:
+            self.root.after_cancel(self.fade_timer)
+            self.fade_timer = None
+        
+        # Cancel existing hover timer if switching nodes
+        if self.hover_timer:
+            self.root.after_cancel(self.hover_timer)
+        
+        self.current_hover_node = node_data
+        
+        # Start timer for tooltip appearance (0.7 seconds)
+        self.hover_timer = self.root.after(300, lambda: self.show_tooltip(node_data, x, y))
+    
+    def on_node_leave(self, event):
+        """Handle mouse leaving a node"""
+        # Cancel hover timer if leaving before tooltip appears
+        if self.hover_timer:
+            self.root.after_cancel(self.hover_timer)
+            self.hover_timer = None
+        
+        self.current_hover_node = None
+        
+        # Start fade out
+        if self.hover_tooltip:
+            self.fade_out_tooltip()
+    
+    def show_tooltip(self, node_data, x, y):
+        """Show tooltip with fade-in effect"""
+        self.hover_timer = None
+        
+        # Remove old tooltip if exists
+        if self.hover_tooltip:
+            self.tree_canvas.delete(self.hover_tooltip)
+        
+        # Build tooltip text
+        tooltip_lines = []
+        
+        if node_data.get('g') is not None:
+            tooltip_lines.append(f"g = {node_data['g']:.2f}")
+        
+        if node_data.get('h') is not None:
+            tooltip_lines.append(f"h = {node_data['h']:.2f}")
+        
+        if node_data.get('g') is not None and node_data.get('h') is not None:
+            f_val = node_data['g'] + node_data['h']
+            tooltip_lines.append(f"f = {f_val:.2f}")
+        
+        if not tooltip_lines:
+            return
+        
+        tooltip_text = "\n".join(tooltip_lines)
+        
+        # Calculate tooltip position (offset from node)
+        tooltip_x = x + 25
+        tooltip_y = y - 10
+        
+        # Create tooltip background and text
+        # Start with alpha = 0 (invisible)
+        self.tooltip_alpha = 0.0
+        
+        # Create the tooltip elements
+        bg_color = self._get_alpha_color("#FFFACD", self.tooltip_alpha)  # Light yellow
+        
+        # Create text to measure size
+        temp_text = self.tree_canvas.create_text(tooltip_x, tooltip_y, 
+                                                 text=tooltip_text,
+                                                 font=("Arial", 9, "bold"),
+                                                 anchor=tk.W)
+        bbox = self.tree_canvas.bbox(temp_text)
+        self.tree_canvas.delete(temp_text)
+        
+        # Create background rectangle
+        padding = 5
+        bg_rect = self.tree_canvas.create_rectangle(
+            bbox[0] - padding, bbox[1] - padding,
+            bbox[2] + padding, bbox[3] + padding,
+            fill=bg_color, outline="black", width=1,
+            tags="tooltip"
+        )
+        
+        # Create text
+        text_item = self.tree_canvas.create_text(
+            tooltip_x, tooltip_y,
+            text=tooltip_text,
+            font=("Arial", 9, "bold"),
+            anchor=tk.W,
+            fill=self._get_alpha_color("#000000", self.tooltip_alpha),
+            tags="tooltip"
+        )
+        
+        # Group tooltip items
+        self.hover_tooltip = {"bg": bg_rect, "text": text_item, "data": node_data}
+        
+        # Start fade-in animation
+        self.fade_in_tooltip()
+    
+    def fade_in_tooltip(self):
+        """Animate tooltip fade-in"""
+        if not self.hover_tooltip:
+            return
+        
+        # Check if still hovering over the same node
+        if self.current_hover_node != self.hover_tooltip["data"]:
+            self.tree_canvas.delete("tooltip")
+            self.hover_tooltip = None
+            return
+        
+        self.tooltip_alpha += 0.1
+        
+        if self.tooltip_alpha >= 1.0:
+            self.tooltip_alpha = 1.0
+            # Fade-in complete
+            self._update_tooltip_alpha()
+            return
+        
+        self._update_tooltip_alpha()
+        
+        # Continue animation
+        self.root.after(30, self.fade_in_tooltip)
+    
+    def fade_out_tooltip(self):
+        """Animate tooltip fade-out"""
+        if not self.hover_tooltip:
+            return
+        
+        self.tooltip_alpha -= 0.1
+        
+        if self.tooltip_alpha <= 0.0:
+            self.tooltip_alpha = 0.0
+            # Fade-out complete, remove tooltip
+            self.tree_canvas.delete("tooltip")
+            self.hover_tooltip = None
+            return
+        
+        self._update_tooltip_alpha()
+        
+        # Continue animation
+        self.fade_timer = self.root.after(30, self.fade_out_tooltip)
+    
+    def _update_tooltip_alpha(self):
+        """Update tooltip colors based on current alpha"""
+        if not self.hover_tooltip:
+            return
+        
+        bg_color = self._get_alpha_color("#FFFACD", self.tooltip_alpha)
+        text_color = self._get_alpha_color("#000000", self.tooltip_alpha)
+        
+        try:
+            self.tree_canvas.itemconfig(self.hover_tooltip["bg"], fill=bg_color)
+            self.tree_canvas.itemconfig(self.hover_tooltip["text"], fill=text_color)
+        except:
+            # Item may have been deleted
+            self.hover_tooltip = None
+    
+    def _get_alpha_color(self, hex_color, alpha):
+        """Convert hex color with alpha to a color (simulated with white blend)"""
+        # Parse hex color
+        r = int(hex_color[1:3], 16)
+        g = int(hex_color[3:5], 16)
+        b = int(hex_color[5:7], 16)
+        
+        # Blend with white based on alpha (simulate transparency)
+        bg_r, bg_g, bg_b = 255, 255, 255  # White background
+        
+        final_r = int(r * alpha + bg_r * (1 - alpha))
+        final_g = int(g * alpha + bg_g * (1 - alpha))
+        final_b = int(b * alpha + bg_b * (1 - alpha))
+        
+        return f"#{final_r:02x}{final_g:02x}{final_b:02x}"
+                 
+                
     
     def organize_tree_by_levels(self):
         if not self.search_tree:
@@ -653,7 +1082,6 @@ class GUI:
                 if child['parent'] == node['id'] and child['id'] not in visited:
                     queue.append((child, level + 1))
                     visited.add(child['id'])
-        
         return levels
 
 

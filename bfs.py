@@ -29,7 +29,7 @@ class BFS(SearchAlgorithms):
                     if node[0] not in self.frontier:
                       
                         self.frontier.append(node[0])
-                step_callback(current_node, path, self.frontier, visited, is_goal)
+                step_callback(current_node, None, path, self.frontier, visited, is_goal)
                 return [number_of_nodes, path, current_node]
             
             # Explore neighbors
@@ -42,13 +42,11 @@ class BFS(SearchAlgorithms):
                         if node[0] not in self.frontier:
                             self.frontier.append(node[0])
 
-                    step_callback(current_node, new_path, self.frontier, visited, is_goal)
+                    step_callback(current_node, neighbor, new_path, self.frontier, visited, is_goal)
                     queue.append((neighbor, new_path))
-
-    
 
         # If no path found, still show final state
         if step_callback:
-            step_callback(current_node, path, [], visited, False)
+            step_callback(current_node, None, path, [], visited, False)
             
         return [number_of_nodes, None, None]  # No path found

@@ -30,7 +30,7 @@ class GBFS(SearchAlgorithms):
                 if node[2] not in self.frontier:
                     self.frontier.append(node[2])
 
-            step_callback(current_node, path, self.frontier, visited, is_goal)
+            step_callback(current_node, None, path, self.frontier, visited, is_goal, None, h(current_node))
             return [number_of_nodes, path, current_node]
         
         # expand neighbors in ascending id
@@ -39,14 +39,16 @@ class GBFS(SearchAlgorithms):
                 continue
 
             new_path = path + [neighbor]
+
+            heuristic_cost = h(neighbor)
             counter += 1
-            heapq.heappush(min_heap, (h(neighbor), counter, neighbor, new_path))
+            heapq.heappush(min_heap, (heuristic_cost, counter, neighbor, new_path))
             number_of_nodes += 1
 
             for node in min_heap:
                 if node[2] not in self.frontier:
                     self.frontier.append(node[2])
 
-                step_callback(current_node, new_path, self.frontier, visited, is_goal)
+            step_callback(current_node, neighbor, new_path, self.frontier, visited, is_goal, None, heuristic_cost)
 
     return [number_of_nodes, None, None]

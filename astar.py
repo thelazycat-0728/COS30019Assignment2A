@@ -38,7 +38,7 @@ class AS(SearchAlgorithms):
                     if node[3] not in self.frontier:
                         self.frontier.append(node[3])
 
-                step_callback(current_node, path, self.frontier, visited, is_goal)
+                step_callback(current_node, None, path, self.frontier, visited, is_goal, g_cost[current_node], h(current_node))
                 return [number_of_nodes, path, current_node]
             
 
@@ -59,5 +59,5 @@ class AS(SearchAlgorithms):
                         if node[3] not in self.frontier:
                             self.frontier.append(node[3])
 
-                        step_callback(current_node, new_path, self.frontier, visited, is_goal)
+                    step_callback(current_node, neighbor, new_path, self.frontier, visited, is_goal, g_cost[neighbor], h_n)
         return [number_of_nodes, None, None]

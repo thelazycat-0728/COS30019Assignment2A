@@ -9,17 +9,17 @@ class CUS2(SearchAlgorithms):
         self.total_generated_nodes = 0
         self.h = make_heuristics(self.coords, self.goals)
 
-    def iterate(self, node, g, bound, path, visited, frontier=None, step_callback=None):
+    def iterate(self, current_node, g, bound, path, visited, frontier=None, step_callback=None):
         
         """Recursive DFS with f-cost bound"""
-        frontier.remove(node)
-        visited.add(node)
-        f = g + self.h(node)
+        frontier.remove(current_node)
+        visited.add(current_node)
+        f = g + self.h(current_node)
 
         
 
-        if node in self.goals:
-            return True, node, path
+        if current_node in self.goals:
+            return True, current_node, path
 
         # Exceeds bound - return new threshold
         if f > bound:
@@ -29,7 +29,7 @@ class CUS2(SearchAlgorithms):
         min_excess = math.inf
         neighbor_list = []
         # Explore neighbors
-        for neighbor, cost in self.graph['adjacency_list'][node]:
+        for neighbor, cost in self.graph['adjacency_list'][current_node]:
 
             if neighbor in visited:
                 continue
@@ -40,7 +40,7 @@ class CUS2(SearchAlgorithms):
             if neighbor not in self.frontier:
                 self.frontier.append(neighbor)
 
-            step_callback(neighbor, path + [neighbor], self.frontier, visited, False)
+            step_callback(current_node, neighbor, path + [neighbor], self.frontier, visited, False, g + cost, self.h(neighbor), bound)
 
         
         for neighbor in neighbor_list:
@@ -99,9 +99,20 @@ class CUS2(SearchAlgorithms):
 
             # If goal is found, return immediately after showing the solution
             if is_goal:
+                cost = 0
 
-                step_callback(goal_node, goal_path, self.frontier, visited, is_goal)
-                return [self.total_generated_nodes, path, goal_node]
+                # Calculate g cost of the found path
+                for i in range(len(goal_path) - 1):
+                    from_node = goal_path[i]
+                    to_node = goal_path[i + 1]
+                    for neighbor, edge_cost in self.graph['adjacency_list'].get(from_node, []):
+                        if neighbor == to_node:
+                            cost += edge_cost
+                            break
+
+      
+                step_callback(goal_node, None, goal_path, self.frontier, visited, is_goal, cost, self.h(goal_node), bound)
+                return [self.total_generated_nodes, goal_path, goal_node]
 
             # No solution exists
             if outcome == math.inf:
@@ -113,4 +124,4 @@ class CUS2(SearchAlgorithms):
             self.frontier = []
             visited = {}
 
-            step_callback(None, [], self.frontier, visited, False)
+            step_callback(None, [], self.frontier, visited, False, None, None, bound)

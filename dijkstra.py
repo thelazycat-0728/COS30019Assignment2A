@@ -25,7 +25,7 @@ class CUS1(SearchAlgorithms):
                 if node[2] not in self.frontier:
                     self.frontier.append(node[2])
 
-            step_callback(current_node, path, self.frontier, visited, is_goal)
+            step_callback(current_node, None, path, self.frontier, visited, is_goal, cost)
             return [number_of_nodes, path, current_node]
 
         if current_node not in visited:
@@ -49,7 +49,7 @@ class CUS1(SearchAlgorithms):
                             if node[2] not in self.frontier:
                                 self.frontier.append(node[2])
 
-                        step_callback(current_node, new_path, self.frontier, visited, is_goal)
+                        step_callback(current_node ,neighbor, new_path, self.frontier, visited, is_goal, new_cost)
                         
 
     return [number_of_nodes, None, None]  # No path found
