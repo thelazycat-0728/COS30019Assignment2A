@@ -20,19 +20,21 @@ class CUS1(SearchAlgorithms):
         is_goal = current_node in self.goals
 
         # If goal is found, return immediately after showing the solution
-        if is_goal:
-            for node in min_heap:
-                if node[2] not in self.frontier:
-                    self.frontier.append(node[2])
-
-            step_callback(current_node, None, path, self.frontier, visited, is_goal, cost)
-            return [number_of_nodes, path, current_node]
+       
 
         if current_node not in visited:
             
             visited.add(current_node)
             
             self.frontier.remove(current_node)
+
+            if is_goal:
+                for node in min_heap:
+                    if node[2] not in self.frontier:
+                        self.frontier.append(node[2])
+
+                step_callback(current_node, None, path, self.frontier, visited, is_goal, None)
+                return [number_of_nodes, path, current_node]
 
             for neighbor, edge_cost in self.graph['adjacency_list'][current_node]:
                 if neighbor not in visited:
@@ -48,7 +50,6 @@ class CUS1(SearchAlgorithms):
                         for node in min_heap:
                             if node[2] not in self.frontier:
                                 self.frontier.append(node[2])
-
                         step_callback(current_node ,neighbor, new_path, self.frontier, visited, is_goal, new_cost)
                         
 

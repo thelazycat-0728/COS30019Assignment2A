@@ -587,7 +587,7 @@ class GUI:
             return
         
         # Build tree structure
-        self.build_tree_from_path(path, current_node, neighbor, is_goal, g_cost, h_cost)
+        self.build_tree_from_path(path, current_node, neighbor, visited, is_goal, g_cost, h_cost)
 
         
 
@@ -614,11 +614,19 @@ class GUI:
     
     # ...existing code...
 
-    def build_tree_from_path(self, path, current_node, neighbor, is_goal, g_cost=None, h_cost=None):
+    def build_tree_from_path(self, path, current_node, neighbor, visited, is_goal, g_cost=None, h_cost=None):
         """Build/update search tree from current path"""
         
+        for node_data in self.search_tree:
+            if node_data['node'] in visited:
+                node_data['state'] = 'visited'
+
+
         # Add nodes in path if not already added
+
+
         for i, node in enumerate(path):
+            
             node_key = (node, i)
             
             if node_key not in self.node_ids:
@@ -657,18 +665,19 @@ class GUI:
             else:
                 # Update state of existing node
                 node_id = self.node_ids[node_key]
-        
+               
                 for tree_node in self.search_tree:
+                    
                     if tree_node['id'] == node_id:
                         if is_goal and node in path:
                             tree_node['state'] = 'solution'
-                        elif i < len(path) - 1:  # Nodes before current in path
-                            tree_node['state'] = 'visited'
                         elif node == current_node:
-                            
                             tree_node['state'] = 'current'  # Currently being expanded
+                        elif node == neighbor:
                             tree_node['g'] = g_cost
                             tree_node['h'] = h_cost
+                        elif i < len(path) - 1:  # Nodes before current in path
+                            tree_node['state'] = 'visited'
 
                         
         
@@ -771,280 +780,176 @@ class GUI:
         self.results_text.insert(1.0, result_text)
     
     def draw_search_tree(self):
-        if not self.search_tree:
-            # Even if tree is empty, draw bound if it exists (for IDA* between iterations)
+            if not self.search_tree:
+                # Even if tree is empty, draw bound if it exists (for IDA* between iterations)
+                if self.current_bound is not None and self.algorithm_var.get() == 'idastar':
+                    canvas_width = self.tree_canvas.winfo_width() or 800
+                    canvas_height = self.tree_canvas.winfo_height() or 600
+                    
+                    self.tree_canvas.delete("all")
+                    
+                    # Draw bound label at bottom left
+                    bound_text = f"Current Bound: {self.current_bound:.2f}"
+                    self.tree_canvas.create_text(
+                        10, canvas_height - 10,
+                        text=bound_text,
+                        font=("Arial", 12, "bold"),
+                        fill="darkred",
+                        anchor=tk.SW
+                    )
+                return
+            
+            self.tree_canvas.delete("all")
+            
+            levels = self.organize_tree_by_levels()
+            
+            if not levels:
+                return
+            
+            level_height = 80  # Increased for labels
+            node_spacing = 80  # Increased for labels
+            start_y = 40
+            
+            max_width = max(len(level) for level in levels) * node_spacing
+            canvas_width = max(800, max_width + 100)
+            canvas_height = len(levels) * level_height + 100
+            
+            self.tree_canvas.config(scrollregion=(0, 0, canvas_width, canvas_height))
+            
+            node_positions = {}
+            
+            # Draw tree level by level
+            for level_idx, level_nodes in enumerate(levels):
+                y = start_y + level_idx * level_height
+                num_nodes = len(level_nodes)
+                total_width = num_nodes * node_spacing
+                start_x = (canvas_width - total_width) / 2
+                
+                for idx, node_data in enumerate(level_nodes):
+                    x = start_x + idx * node_spacing
+                    node_positions[node_data['id']] = (x, y)
+                    
+                    # Draw edge to parent with arrow
+                    if node_data['parent'] is not None and node_data['parent'] in node_positions:
+                        px, py = node_positions[node_data['parent']]
+                        edge_color = "yellow" if node_data['state'] == 'solution' else "gray"
+                        edge_width = 3 if node_data['state'] == 'solution' else 2
+                        
+                        # Calculate direction vector
+                        dx = x - px
+                        dy = y - py
+                        length = (dx**2 + dy**2)**0.5
+                        
+                        r = 16  # Node radius
+                        
+                        if length > 0:
+                            # Unit vector
+                            ux = dx / length
+                            uy = dy / length
+                            
+                            # Start point (just outside parent node)
+                            start_x_edge = px + ux * r
+                            start_y_edge = py + uy * r
+                            
+                            # End point (just at edge of child node)
+                            end_x = x - ux * r
+                            end_y = y - uy * r
+                            
+                            # Draw line with arrow pointing to child
+                            self.tree_canvas.create_line(start_x_edge, start_y_edge, end_x, end_y, 
+                                                        fill=edge_color, width=edge_width,
+                                                        arrow=tk.LAST, arrowshape=(10, 12, 5))
+                        else:
+                            # Fallback if nodes are at same position
+                            self.tree_canvas.create_line(px, py, x, y, fill=edge_color, width=edge_width)
+                    
+                    # Determine node color based on state
+                    state = node_data.get('state', 'frontier')
+                    if state == 'solution':
+                        color = "yellow"
+                    elif state == 'visited':
+                        color = "lightblue"
+                    elif state == 'frontier':
+                        color = "lightyellow"
+                    elif state == 'current':
+                        color = "orange"
+                    elif node_data['node'] == self.graph['origin']:
+                        color = "green"
+                    elif node_data['node'] in self.graph['destinations']:
+                        color = "red"
+                    else:
+                        color = "white"
+                    
+                    # Draw node
+                    r = 16
+                    self.tree_canvas.create_oval(x - r, y - r, x + r, y + r, 
+                                                fill=color, outline="black", width=2)
+                    self.tree_canvas.create_text(x, y, text=str(node_data['node']), 
+                                                font=("Arial", 9, "bold"))
+                    
+                    # Draw g, h, f values to the right of the node if they exist
+                    if node_data.get('g') is not None or node_data.get('h') is not None:
+                        value_lines = []
+                        
+                        if node_data.get('g') is not None:
+                            value_lines.append(f"g={node_data['g']:.1f}")
+                        
+                        if node_data.get('h') is not None:
+                            value_lines.append(f"h={node_data['h']:.1f}")
+                        
+                        if node_data.get('g') is not None and node_data.get('h') is not None:
+                            f_val = node_data['g'] + node_data['h']
+                            value_lines.append(f"f={f_val:.1f}")
+                        
+                        # Draw values to the right of node
+                        value_text = "\n".join(value_lines)
+                        text_x = x + r + 5  # 5 pixels to the right of node
+                        
+                        # Create background for better readability
+                        temp_text = self.tree_canvas.create_text(
+                            text_x, y,
+                            text=value_text,
+                            font=("Arial", 7, "bold"),
+                            anchor=tk.W
+                        )
+                        bbox = self.tree_canvas.bbox(temp_text)
+                        self.tree_canvas.delete(temp_text)
+                        
+                        if bbox:
+                            # Draw white background rectangle
+                            padding = 2
+                            self.tree_canvas.create_rectangle(
+                                bbox[0] - padding, bbox[1] - padding,
+                                bbox[2] + padding, bbox[3] + padding,
+                                fill="white", outline="gray", width=1
+                            )
+                        
+                        # Draw text on top of background
+                        self.tree_canvas.create_text(
+                            text_x, y,
+                            text=value_text,
+                            font=("Arial", 7, "bold"),
+                            anchor=tk.W,
+                            fill="darkblue"
+                        )
+            
+            # Draw IDA* bound at bottom left if applicable
             if self.current_bound is not None and self.algorithm_var.get() == 'idastar':
-                canvas_width = self.tree_canvas.winfo_width() or 800
-                canvas_height = self.tree_canvas.winfo_height() or 600
+                # Get visible canvas dimensions
+                visible_canvas_height = self.tree_canvas.winfo_height()
                 
-                self.tree_canvas.delete("all")
-                
-                # Draw bound label at bottom left
+                # Draw bound at bottom left of visible area
                 bound_text = f"Current Bound: {self.current_bound:.2f}"
+                
                 self.tree_canvas.create_text(
-                    10, canvas_height - 10,
+                    10, visible_canvas_height - 10,
                     text=bound_text,
                     font=("Arial", 12, "bold"),
                     fill="darkred",
                     anchor=tk.SW
                 )
-            return
-        
-        self.tree_canvas.delete("all")
-        
-        levels = self.organize_tree_by_levels()
-        
-        if not levels:
-            return
-        
-        level_height = 70
-        node_spacing = 55
-        start_y = 30
-        
-        max_width = max(len(level) for level in levels) * node_spacing
-        canvas_width = max(800, max_width + 100)
-        canvas_height = len(levels) * level_height + 100
-        
-        self.tree_canvas.config(scrollregion=(0, 0, canvas_width, canvas_height))
-        
-        node_positions = {}
-        
-        # Draw tree level by level
-        for level_idx, level_nodes in enumerate(levels):
-            y = start_y + level_idx * level_height
-            num_nodes = len(level_nodes)
-            total_width = num_nodes * node_spacing
-            start_x = (canvas_width - total_width) / 2
-            
-            for idx, node_data in enumerate(level_nodes):
-                x = start_x + idx * node_spacing
-                node_positions[node_data['id']] = (x, y)
-                
-                # Draw edge to parent
-                if node_data['parent'] is not None and node_data['parent'] in node_positions:
-                    px, py = node_positions[node_data['parent']]
-                    edge_color = "yellow" if node_data['state'] == 'solution' else "gray"
-                    edge_width = 3 if node_data['state'] == 'solution' else 2
-                    self.tree_canvas.create_line(px, py, x, y, fill=edge_color, width=edge_width)
-                
-                # Determine node color based on state
-                state = node_data.get('state', 'frontier')
-                if state == 'solution':
-                    color = "yellow"
-                elif state == 'visited':
-                    color = "lightblue"
-                elif state == 'frontier':
-                    color = "lightyellow"
-                elif state == 'current':
-                    color = "orange"
-                elif node_data['node'] == self.graph['origin']:
-                    color = "green"
-                elif node_data['node'] in self.graph['destinations']:
-                    color = "red"
-                else:
-                    color = "white"
-                
-                # Draw node
-                r = 16
-                self.tree_canvas.create_oval(x - r, y - r, x + r, y + r, 
-                                            fill=color, outline="black", width=2, tags=f"node_{node_data['id']}")
-                self.tree_canvas.create_text(x, y, text=str(node_data['node']), 
-                                            font=("Arial", 9, "bold"), tags=(f"node_{node_data['id']}",))
-                
-                # Bind hover events
-                self.tree_canvas.tag_bind(f"node_{node_data['id']}", "<Enter>", 
-                                         lambda e, nd=node_data, nx=x, ny=y: self.on_node_enter(e, nd, nx, ny))
-                self.tree_canvas.tag_bind(f"node_{node_data['id']}", "<Leave>", 
-                                         lambda e: self.on_node_leave(e))
-        
-        # Draw IDA* bound at bottom left if applicable
-        if self.current_bound is not None and self.algorithm_var.get() == 'idastar':
-            # Get visible canvas dimensions
-            visible_canvas_height = self.tree_canvas.winfo_height()
-            
-            # Draw bound at bottom left of visible area
-            bound_text = f"Current Bound: {self.current_bound:.2f}"
-            
-            self.tree_canvas.create_text(
-                10, visible_canvas_height - 10,
-                text=bound_text,
-                font=("Arial", 12, "bold"),
-                fill="darkred",
-                anchor=tk.SW
-            )
     
-    def on_node_enter(self, event, node_data, x, y):
-        """Handle mouse entering a node"""
-        # Cancel any existing fade timer
-        if self.fade_timer:
-            self.root.after_cancel(self.fade_timer)
-            self.fade_timer = None
-        
-        # Cancel existing hover timer if switching nodes
-        if self.hover_timer:
-            self.root.after_cancel(self.hover_timer)
-        
-        self.current_hover_node = node_data
-        
-        # Start timer for tooltip appearance (0.7 seconds)
-        self.hover_timer = self.root.after(300, lambda: self.show_tooltip(node_data, x, y))
     
-    def on_node_leave(self, event):
-        """Handle mouse leaving a node"""
-        # Cancel hover timer if leaving before tooltip appears
-        if self.hover_timer:
-            self.root.after_cancel(self.hover_timer)
-            self.hover_timer = None
-        
-        self.current_hover_node = None
-        
-        # Start fade out
-        if self.hover_tooltip:
-            self.fade_out_tooltip()
-    
-    def show_tooltip(self, node_data, x, y):
-        """Show tooltip with fade-in effect"""
-        self.hover_timer = None
-        
-        # Remove old tooltip if exists
-        if self.hover_tooltip:
-            self.tree_canvas.delete(self.hover_tooltip)
-        
-        # Build tooltip text
-        tooltip_lines = []
-        
-        if node_data.get('g') is not None:
-            tooltip_lines.append(f"g = {node_data['g']:.2f}")
-        
-        if node_data.get('h') is not None:
-            tooltip_lines.append(f"h = {node_data['h']:.2f}")
-        
-        if node_data.get('g') is not None and node_data.get('h') is not None:
-            f_val = node_data['g'] + node_data['h']
-            tooltip_lines.append(f"f = {f_val:.2f}")
-        
-        if not tooltip_lines:
-            return
-        
-        tooltip_text = "\n".join(tooltip_lines)
-        
-        # Calculate tooltip position (offset from node)
-        tooltip_x = x + 25
-        tooltip_y = y - 10
-        
-        # Create tooltip background and text
-        # Start with alpha = 0 (invisible)
-        self.tooltip_alpha = 0.0
-        
-        # Create the tooltip elements
-        bg_color = self._get_alpha_color("#FFFACD", self.tooltip_alpha)  # Light yellow
-        
-        # Create text to measure size
-        temp_text = self.tree_canvas.create_text(tooltip_x, tooltip_y, 
-                                                 text=tooltip_text,
-                                                 font=("Arial", 9, "bold"),
-                                                 anchor=tk.W)
-        bbox = self.tree_canvas.bbox(temp_text)
-        self.tree_canvas.delete(temp_text)
-        
-        # Create background rectangle
-        padding = 5
-        bg_rect = self.tree_canvas.create_rectangle(
-            bbox[0] - padding, bbox[1] - padding,
-            bbox[2] + padding, bbox[3] + padding,
-            fill=bg_color, outline="black", width=1,
-            tags="tooltip"
-        )
-        
-        # Create text
-        text_item = self.tree_canvas.create_text(
-            tooltip_x, tooltip_y,
-            text=tooltip_text,
-            font=("Arial", 9, "bold"),
-            anchor=tk.W,
-            fill=self._get_alpha_color("#000000", self.tooltip_alpha),
-            tags="tooltip"
-        )
-        
-        # Group tooltip items
-        self.hover_tooltip = {"bg": bg_rect, "text": text_item, "data": node_data}
-        
-        # Start fade-in animation
-        self.fade_in_tooltip()
-    
-    def fade_in_tooltip(self):
-        """Animate tooltip fade-in"""
-        if not self.hover_tooltip:
-            return
-        
-        # Check if still hovering over the same node
-        if self.current_hover_node != self.hover_tooltip["data"]:
-            self.tree_canvas.delete("tooltip")
-            self.hover_tooltip = None
-            return
-        
-        self.tooltip_alpha += 0.1
-        
-        if self.tooltip_alpha >= 1.0:
-            self.tooltip_alpha = 1.0
-            # Fade-in complete
-            self._update_tooltip_alpha()
-            return
-        
-        self._update_tooltip_alpha()
-        
-        # Continue animation
-        self.root.after(30, self.fade_in_tooltip)
-    
-    def fade_out_tooltip(self):
-        """Animate tooltip fade-out"""
-        if not self.hover_tooltip:
-            return
-        
-        self.tooltip_alpha -= 0.1
-        
-        if self.tooltip_alpha <= 0.0:
-            self.tooltip_alpha = 0.0
-            # Fade-out complete, remove tooltip
-            self.tree_canvas.delete("tooltip")
-            self.hover_tooltip = None
-            return
-        
-        self._update_tooltip_alpha()
-        
-        # Continue animation
-        self.fade_timer = self.root.after(30, self.fade_out_tooltip)
-    
-    def _update_tooltip_alpha(self):
-        """Update tooltip colors based on current alpha"""
-        if not self.hover_tooltip:
-            return
-        
-        bg_color = self._get_alpha_color("#FFFACD", self.tooltip_alpha)
-        text_color = self._get_alpha_color("#000000", self.tooltip_alpha)
-        
-        try:
-            self.tree_canvas.itemconfig(self.hover_tooltip["bg"], fill=bg_color)
-            self.tree_canvas.itemconfig(self.hover_tooltip["text"], fill=text_color)
-        except:
-            # Item may have been deleted
-            self.hover_tooltip = None
-    
-    def _get_alpha_color(self, hex_color, alpha):
-        """Convert hex color with alpha to a color (simulated with white blend)"""
-        # Parse hex color
-        r = int(hex_color[1:3], 16)
-        g = int(hex_color[3:5], 16)
-        b = int(hex_color[5:7], 16)
-        
-        # Blend with white based on alpha (simulate transparency)
-        bg_r, bg_g, bg_b = 255, 255, 255  # White background
-        
-        final_r = int(r * alpha + bg_r * (1 - alpha))
-        final_g = int(g * alpha + bg_g * (1 - alpha))
-        final_b = int(b * alpha + bg_b * (1 - alpha))
-        
-        return f"#{final_r:02x}{final_g:02x}{final_b:02x}"
                  
                 
     
@@ -1078,10 +983,21 @@ class GUI:
             levels[level].append(node)
             
             # Find children
+            children = []
             for child in self.search_tree:
                 if child['parent'] == node['id'] and child['id'] not in visited:
-                    queue.append((child, level + 1))
+                    children.append(child)
                     visited.add(child['id'])
+            
+            # For DFS, reverse children order to show right-to-left
+            
+            if self.algorithm_var.get() == 'dfs':
+                children.reverse()
+            
+            # Add children to queue
+            for child in children:
+                queue.append((child, level + 1))
+        
         return levels
 
 
