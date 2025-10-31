@@ -4,7 +4,7 @@ class SearchAlgorithms:
         self.start = graph['origin']
         self.goals = set(graph['destinations'])
         self.coords = graph['nodes']
-        self.frontier = [self.start]
+        self.frontier = [self.start]  # Initialize frontier with start node
 
 
     def search(self):

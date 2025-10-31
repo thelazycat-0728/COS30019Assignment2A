@@ -9,53 +9,57 @@ class CUS2(SearchAlgorithms):
         self.total_generated_nodes = 0
         self.h = make_heuristics(self.coords, self.goals)
 
-    def iterate(self, current_node, g, bound, path, frontier=None, step_callback=None):
+    def iterate(self, current_node, g, bound, path, step_callback=None):
+
+
         
         """Recursive DFS with f-cost bound"""
-        frontier.remove(current_node)
+        self.frontier.remove(current_node)
         f = g + self.h(current_node)
 
         
-
         if current_node in self.goals:
             return True, current_node, path
 
         # Exceeds bound - return new threshold
+
         if f > bound:
             return f, None, None
-        
-      
+
+
         min_excess = math.inf
         neighbor_list = []
         # Explore neighbors
         for neighbor, cost in self.graph['adjacency_list'][current_node]:
-
             if neighbor in path:
                 continue
             
-            neighbor_list.append(neighbor)
+            neighbor_list.append((neighbor, cost))
             self.total_generated_nodes += 1
 
             if neighbor not in self.frontier:
                 self.frontier.append(neighbor)
+            
             if step_callback:
-                step_callback(current_node, neighbor, path + [neighbor], self.frontier, False, g + cost, self.h(neighbor), bound)
+                step_callback(current_node, neighbor, path + [neighbor], self.frontier, False, g + cost, self.h(neighbor), bound, False)
 
         
-        for neighbor in neighbor_list:
+        for neighbor, cost in neighbor_list:
             result, goal_node, goal_path = self.iterate(
                 neighbor, 
                 g + cost, 
                 bound, 
                 path + [neighbor],
-                frontier=self.frontier,
                 step_callback=step_callback
             )
-
 
             # Goal found
             if result is True:
                 return True, goal_node, goal_path
+            else:
+                if step_callback:
+                    step_callback(current_node, neighbor, path + [neighbor], self.frontier, False, g + cost, self.h(neighbor), bound, True)
+        
             
             # Track minimum f-cost that exceeded bound
             if isinstance(result, (int, float)) and result < min_excess:
@@ -85,7 +89,6 @@ class CUS2(SearchAlgorithms):
                 0.0, 
                 bound, 
                 path,
-                frontier=[self.start],
                 step_callback=step_callback
             )
             
@@ -116,7 +119,7 @@ class CUS2(SearchAlgorithms):
             # Increase bound and try again
             bound = outcome
 
-            self.frontier = []
-            
+            self.frontier = [self.start]
+
             if step_callback:
-                step_callback(None, [], self.frontier, False, None, None, bound)
+                step_callback(None, None, [], self.frontier, False, None, None, bound)
