@@ -214,7 +214,7 @@ class GUI:
         
         return graph
     
-    def draw_graph(self, highlight_current=None, highlight_frontier=None, highlight_path=None, highlighted_visited=None):
+    def draw_graph(self, highlight_current=None, highlight_frontier=None, highlight_path=None):
         if not self.graph:
             return
         
@@ -453,8 +453,6 @@ class GUI:
             elif highlight_frontier and node_id in highlight_frontier:
                 color = "lightyellow"
                 outline_width = 3
-            elif highlighted_visited and node_id in highlighted_visited:
-                color = "lightblue"
                 outline_width = 2
             elif node_id == self.graph['origin']:
                 color = "green"
@@ -553,7 +551,7 @@ class GUI:
             self.root.after(0, self.run_button.config, {"state": tk.NORMAL})
             self.root.after(0, self.pause_button.config, {"state": tk.DISABLED})
     
-    def step_callback(self, current_node, neighbor, path, frontier, visited, is_goal, g_cost=None, h_cost=None, bound=None):
+    def step_callback(self, current_node, neighbor, path, frontier, is_goal, g_cost=None, h_cost=None, bound=None):
         """Called by search algorithm at each step"""
         # Wait if paused
         while self.is_paused and self.is_running:
@@ -575,7 +573,6 @@ class GUI:
                 'neighbor': None,
                 'path': [],
                 'frontier': frontier or [],
-                'visited': visited or set(),
                 'is_goal': False,
                 'tree_data': [],
                 'g_cost': None,
@@ -587,7 +584,7 @@ class GUI:
             return
         
         # Build tree structure
-        self.build_tree_from_path(path, current_node, neighbor, visited, is_goal, g_cost, h_cost)
+        self.build_tree_from_path(path, current_node, neighbor, is_goal, g_cost, h_cost)
 
         
 
@@ -597,7 +594,6 @@ class GUI:
             'neighbor': neighbor,
             'path': path,
             'frontier': frontier,
-            'visited': visited,
             'is_goal': is_goal,
             'tree_data': [node.copy() for node in self.search_tree],
             'g_cost': g_cost,
@@ -614,20 +610,13 @@ class GUI:
     
     # ...existing code...
 
-    def build_tree_from_path(self, path, current_node, neighbor, visited, is_goal, g_cost=None, h_cost=None):
+    def build_tree_from_path(self, path, current_node, neighbor, is_goal, g_cost=None, h_cost=None):
         """Build/update search tree from current path"""
         
-        for node_data in self.search_tree:
-            if node_data['node'] in visited:
-                node_data['state'] = 'visited'
-
-
         # Add nodes in path if not already added
-
-
         for i, node in enumerate(path):
             
-            node_key = (node, i)
+            node_key = (node, i)  # Key is (node_value, depth) to differentiate same nodes in different paths
             
             if node_key not in self.node_ids:
                 node_id = self.node_counter
@@ -639,19 +628,22 @@ class GUI:
                     parent_key = (path[i-1], i-1)
                     parent_id = self.node_ids.get(parent_key)
                 
-                # Determine initial state
-                if is_goal and node == current_node:
+                # Determine initial state based on THIS specific path
+                if is_goal and node == current_node and i == len(path) - 1:
+                    # Only mark as solution if it's the last node in the goal path
                     state = 'solution'
-                elif node == current_node:
-                    state = 'current'  # Currently being expanded
-                
-                elif node == neighbor:
+                elif node == current_node and i == len(path) - 1:
+                    # Currently being expanded (last node in current path)
+                    state = 'current'
+                elif node == neighbor and i == len(path) - 1:
+                    # Frontier node (last node in path)
                     state = 'frontier'
+                else:
+                    # Nodes earlier in the path
+                    state = 'visited'
                 
-
-                node_g = g_cost if node == neighbor else None
-                node_h = h_cost if node == neighbor else None
-
+                node_g = g_cost if node == neighbor and i == len(path) - 1 else None
+                node_h = h_cost if node == neighbor and i == len(path) - 1 else None
                 
                 self.search_tree.append({
                     'id': node_id,
@@ -660,32 +652,37 @@ class GUI:
                     'cost': i,
                     'state': state,
                     'g': node_g,
-                    'h': node_h
+                    'h': node_h,
+                    'path_id': id(path)  # Store path identifier
                 })
             else:
-                # Update state of existing node
+                # Update state of existing node in THIS specific path position
                 node_id = self.node_ids[node_key]
                
                 for tree_node in self.search_tree:
-                    
                     if tree_node['id'] == node_id:
+                        # Only update if it's part of the current operation
                         if is_goal and node in path:
                             tree_node['state'] = 'solution'
-                        elif node == current_node:
-                            tree_node['state'] = 'current'  # Currently being expanded
                         elif node == neighbor:
                             tree_node['g'] = g_cost
                             tree_node['h'] = h_cost
                         elif i < len(path) - 1:  # Nodes before current in path
                             tree_node['state'] = 'visited'
 
-                        
+                        break
         
         # Mark all nodes in solution path when goal is found
         if is_goal:
-            for node_data in self.search_tree:
-                if node_data['node'] in path:
-                    node_data['state'] = 'solution'
+            # Only mark nodes in THIS specific path
+            for i, node in enumerate(path):
+                node_key = (node, i)
+                if node_key in self.node_ids:
+                    node_id = self.node_ids[node_key]
+                    for node_data in self.search_tree:
+                        if node_data['id'] == node_id:
+                            node_data['state'] = 'solution'
+                            break
 
 
     
@@ -699,8 +696,7 @@ class GUI:
         self.draw_graph(
             highlight_current=step_data['current_node'],
             highlight_frontier=step_data['frontier'],
-            highlight_path=highlight_path,
-            highlighted_visited=step_data['visited']
+            highlight_path=highlight_path
         )
         
         # Update search tree
@@ -715,7 +711,6 @@ class GUI:
         
         status = f"Current Node: {step_data['current_node']}\n"
         status += f"Current Path: {' → '.join(map(str, step_data['path']))}\n"
-        status += f"Visited Nodes: {len(step_data['visited'])}\n"
         status += f"Frontier Size: {len(step_data['frontier'])}\n"
         status += f"Frontier: {step_data['frontier'][:10]}"
         if len(step_data['frontier']) > 10:
@@ -780,179 +775,180 @@ class GUI:
         self.results_text.insert(1.0, result_text)
     
     def draw_search_tree(self):
-            if not self.search_tree:
-                # Even if tree is empty, draw bound if it exists (for IDA* between iterations)
-                if self.current_bound is not None and self.algorithm_var.get() == 'idastar':
-                    canvas_width = self.tree_canvas.winfo_width() or 800
-                    canvas_height = self.tree_canvas.winfo_height() or 600
-                    
-                    self.tree_canvas.delete("all")
-                    
-                    # Draw bound label at bottom left
-                    bound_text = f"Current Bound: {self.current_bound:.2f}"
-                    self.tree_canvas.create_text(
-                        10, canvas_height - 10,
-                        text=bound_text,
-                        font=("Arial", 12, "bold"),
-                        fill="darkred",
-                        anchor=tk.SW
-                    )
-                return
-            
-            self.tree_canvas.delete("all")
-            
-            levels = self.organize_tree_by_levels()
-            
-            if not levels:
-                return
-            
-            level_height = 80  # Increased for labels
-            node_spacing = 80  # Increased for labels
-            start_y = 40
-            
-            max_width = max(len(level) for level in levels) * node_spacing
-            canvas_width = max(800, max_width + 100)
-            canvas_height = len(levels) * level_height + 100
-            
-            self.tree_canvas.config(scrollregion=(0, 0, canvas_width, canvas_height))
-            
-            node_positions = {}
-            
-            # Draw tree level by level
-            for level_idx, level_nodes in enumerate(levels):
-                y = start_y + level_idx * level_height
-                num_nodes = len(level_nodes)
-                total_width = num_nodes * node_spacing
-                start_x = (canvas_width - total_width) / 2
-                
-                for idx, node_data in enumerate(level_nodes):
-                    x = start_x + idx * node_spacing
-                    node_positions[node_data['id']] = (x, y)
-                    
-                    # Draw edge to parent with arrow
-                    if node_data['parent'] is not None and node_data['parent'] in node_positions:
-                        px, py = node_positions[node_data['parent']]
-                        edge_color = "yellow" if node_data['state'] == 'solution' else "gray"
-                        edge_width = 3 if node_data['state'] == 'solution' else 2
-                        
-                        # Calculate direction vector
-                        dx = x - px
-                        dy = y - py
-                        length = (dx**2 + dy**2)**0.5
-                        
-                        r = 16  # Node radius
-                        
-                        if length > 0:
-                            # Unit vector
-                            ux = dx / length
-                            uy = dy / length
-                            
-                            # Start point (just outside parent node)
-                            start_x_edge = px + ux * r
-                            start_y_edge = py + uy * r
-                            
-                            # End point (just at edge of child node)
-                            end_x = x - ux * r
-                            end_y = y - uy * r
-                            
-                            # Draw line with arrow pointing to child
-                            self.tree_canvas.create_line(start_x_edge, start_y_edge, end_x, end_y, 
-                                                        fill=edge_color, width=edge_width,
-                                                        arrow=tk.LAST, arrowshape=(10, 12, 5))
-                        else:
-                            # Fallback if nodes are at same position
-                            self.tree_canvas.create_line(px, py, x, y, fill=edge_color, width=edge_width)
-                    
-                    # Determine node color based on state
-                    state = node_data.get('state', 'frontier')
-                    if state == 'solution':
-                        color = "yellow"
-                    elif state == 'visited':
-                        color = "lightblue"
-                    elif state == 'frontier':
-                        color = "lightyellow"
-                    elif state == 'current':
-                        color = "orange"
-                    elif node_data['node'] == self.graph['origin']:
-                        color = "green"
-                    elif node_data['node'] in self.graph['destinations']:
-                        color = "red"
-                    else:
-                        color = "white"
-                    
-                    # Draw node
-                    r = 16
-                    self.tree_canvas.create_oval(x - r, y - r, x + r, y + r, 
-                                                fill=color, outline="black", width=2)
-                    self.tree_canvas.create_text(x, y, text=str(node_data['node']), 
-                                                font=("Arial", 9, "bold"))
-                    
-                    # Draw g, h, f values to the right of the node if they exist
-                    if node_data.get('g') is not None or node_data.get('h') is not None:
-                        value_lines = []
-                        
-                        if node_data.get('g') is not None:
-                            value_lines.append(f"g={node_data['g']:.1f}")
-                        
-                        if node_data.get('h') is not None:
-                            value_lines.append(f"h={node_data['h']:.1f}")
-                        
-                        if node_data.get('g') is not None and node_data.get('h') is not None:
-                            f_val = node_data['g'] + node_data['h']
-                            value_lines.append(f"f={f_val:.1f}")
-                        
-                        # Draw values to the right of node
-                        value_text = "\n".join(value_lines)
-                        text_x = x + r + 5  # 5 pixels to the right of node
-                        
-                        # Create background for better readability
-                        temp_text = self.tree_canvas.create_text(
-                            text_x, y,
-                            text=value_text,
-                            font=("Arial", 7, "bold"),
-                            anchor=tk.W
-                        )
-                        bbox = self.tree_canvas.bbox(temp_text)
-                        self.tree_canvas.delete(temp_text)
-                        
-                        if bbox:
-                            # Draw white background rectangle
-                            padding = 2
-                            self.tree_canvas.create_rectangle(
-                                bbox[0] - padding, bbox[1] - padding,
-                                bbox[2] + padding, bbox[3] + padding,
-                                fill="white", outline="gray", width=1
-                            )
-                        
-                        # Draw text on top of background
-                        self.tree_canvas.create_text(
-                            text_x, y,
-                            text=value_text,
-                            font=("Arial", 7, "bold"),
-                            anchor=tk.W,
-                            fill="darkblue"
-                        )
-            
-            # Draw IDA* bound at bottom left if applicable
+        if not self.search_tree:
+            # Even if tree is empty, draw bound if it exists (for IDA* between iterations)
             if self.current_bound is not None and self.algorithm_var.get() == 'idastar':
-                # Get visible canvas dimensions
-                visible_canvas_height = self.tree_canvas.winfo_height()
+                canvas_width = self.tree_canvas.winfo_width() or 800
+                canvas_height = self.tree_canvas.winfo_height() or 600
                 
-                # Draw bound at bottom left of visible area
+                self.tree_canvas.delete("all")
+                
+                # Draw bound label at bottom left
                 bound_text = f"Current Bound: {self.current_bound:.2f}"
-                
                 self.tree_canvas.create_text(
-                    10, visible_canvas_height - 10,
+                    10, canvas_height - 10,
                     text=bound_text,
                     font=("Arial", 12, "bold"),
                     fill="darkred",
                     anchor=tk.SW
                 )
-    
-    
-                 
+            return
+        
+        self.tree_canvas.delete("all")
+        
+        levels = self.organize_tree_by_levels()
+        
+        if not levels:
+            return
+        
+        level_height = 80  # Increased for labels
+        node_spacing = 80  # Increased for labels
+        start_y = 40
+        
+        max_width = max(len(level) for level in levels) * node_spacing
+        canvas_width = max(800, max_width + 100)
+        canvas_height = len(levels) * level_height + 100
+        
+        self.tree_canvas.config(scrollregion=(0, 0, canvas_width, canvas_height))
+        
+        node_positions = {}
+        
+        # Draw tree level by level
+        for level_idx, level_nodes in enumerate(levels):
+            y = start_y + level_idx * level_height
+            num_nodes = len(level_nodes)
+            total_width = num_nodes * node_spacing
+            start_x = (canvas_width - total_width) / 2
+            
+            for idx, node_data in enumerate(level_nodes):
+                x = start_x + idx * node_spacing
+                node_positions[node_data['id']] = (x, y)
                 
+                # Draw edge to parent with arrow
+                if node_data['parent'] is not None and node_data['parent'] in node_positions:
+                    px, py = node_positions[node_data['parent']]
+                    edge_color = "yellow" if node_data['state'] == 'solution' else "gray"
+                    edge_width = 3 if node_data['state'] == 'solution' else 2
+                    
+                    # Calculate direction vector
+                    dx = x - px
+                    dy = y - py
+                    length = (dx**2 + dy**2)**0.5
+                    
+                    r = 16  # Node radius
+                    
+                    if length > 0:
+                        # Unit vector
+                        ux = dx / length
+                        uy = dy / length
+                        
+                        # Start point (just outside parent node)
+                        start_x_edge = px + ux * r
+                        start_y_edge = py + uy * r
+                        
+                        # End point (just at edge of child node)
+                        end_x = x - ux * r
+                        end_y = y - uy * r
+                        
+                        # Draw line with arrow pointing to child
+                        self.tree_canvas.create_line(start_x_edge, start_y_edge, end_x, end_y, 
+                                                    fill=edge_color, width=edge_width,
+                                                    arrow=tk.LAST, arrowshape=(10, 12, 5))
+                    else:
+                        # Fallback if nodes are at same position
+                        self.tree_canvas.create_line(px, py, x, y, fill=edge_color, width=edge_width)
+                
+                # Determine node color based on THIS node's specific state in its path
+                state = node_data.get('state', 'frontier')
+                if state == 'solution':
+                    color = "yellow"
+                elif state == 'visited':
+                    color = "lightblue"
+                elif state == 'frontier':
+                    color = "lightyellow"
+                elif state == 'visited':
+                    color = "lightblue"
+                elif state == 'current':
+                    color = "orange"
+                else:
+                    # Check if this specific node instance is origin or destination
+                    if node_data['node'] == self.graph['origin'] and node_data.get('cost', 0) == 0:
+                        color = "green"
+                    elif node_data['node'] in self.graph['destinations']:
+                        color = "red"
+                    else:
+                        color = "white"
+                
+                # Draw node
+                r = 16
+                self.tree_canvas.create_oval(x - r, y - r, x + r, y + r, 
+                                            fill=color, outline="black", width=2)
+                self.tree_canvas.create_text(x, y, text=str(node_data['node']), 
+                                            font=("Arial", 9, "bold"))
+                
+                # Draw g, h, f values to the right of the node if they exist
+                if node_data.get('g') is not None or node_data.get('h') is not None:
+                    value_lines = []
+                    
+                    if node_data.get('g') is not None:
+                        value_lines.append(f"g={node_data['g']:.2f}")
+                    
+                    if node_data.get('h') is not None:
+                        value_lines.append(f"h={node_data['h']:.2f}")
+                    
+                    if node_data.get('g') is not None and node_data.get('h') is not None:
+                        f_val = node_data['g'] + node_data['h']
+                        value_lines.append(f"f={f_val:.2f}")
+                    
+                    # Draw values to the right of node
+                    value_text = "\n".join(value_lines)
+                    text_x = x + r + 5  # 5 pixels to the right of node
+                    
+                    # Create background for better readability
+                    temp_text = self.tree_canvas.create_text(
+                        text_x, y,
+                        text=value_text,
+                        font=("Arial", 7, "bold"),
+                        anchor=tk.W
+                    )
+                    bbox = self.tree_canvas.bbox(temp_text)
+                    self.tree_canvas.delete(temp_text)
+                    
+                    if bbox:
+                        # Draw white background rectangle
+                        padding = 2
+                        self.tree_canvas.create_rectangle(
+                            bbox[0] - padding, bbox[1] - padding,
+                            bbox[2] + padding, bbox[3] + padding,
+                            fill="white", outline="gray", width=1
+                        )
+                    
+                    # Draw text on top of background
+                    self.tree_canvas.create_text(
+                        text_x, y,
+                        text=value_text,
+                        font=("Arial", 7, "bold"),
+                        anchor=tk.W,
+                        fill="darkblue"
+                    )
+        
+        # Draw IDA* bound at bottom left if applicable
+        if self.current_bound is not None and self.algorithm_var.get() == 'idastar':
+            # Get visible canvas dimensions
+            visible_canvas_height = self.tree_canvas.winfo_height()
+            
+            # Draw bound at bottom left of visible area
+            bound_text = f"Current Bound: {self.current_bound:.2f}"
+            
+            self.tree_canvas.create_text(
+                10, visible_canvas_height - 10,
+                text=bound_text,
+                font=("Arial", 12, "bold"),
+                fill="darkred",
+                anchor=tk.SW
+            )
     
+                
     def organize_tree_by_levels(self):
         if not self.search_tree:
             return []

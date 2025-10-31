@@ -9,11 +9,10 @@ class CUS2(SearchAlgorithms):
         self.total_generated_nodes = 0
         self.h = make_heuristics(self.coords, self.goals)
 
-    def iterate(self, current_node, g, bound, path, visited, frontier=None, step_callback=None):
+    def iterate(self, current_node, g, bound, path, frontier=None, step_callback=None):
         
         """Recursive DFS with f-cost bound"""
         frontier.remove(current_node)
-        visited.add(current_node)
         f = g + self.h(current_node)
 
         
@@ -31,7 +30,7 @@ class CUS2(SearchAlgorithms):
         # Explore neighbors
         for neighbor, cost in self.graph['adjacency_list'][current_node]:
 
-            if neighbor in visited:
+            if neighbor in path:
                 continue
             
             neighbor_list.append(neighbor)
@@ -39,8 +38,8 @@ class CUS2(SearchAlgorithms):
 
             if neighbor not in self.frontier:
                 self.frontier.append(neighbor)
-
-            step_callback(current_node, neighbor, path + [neighbor], self.frontier, visited, False, g + cost, self.h(neighbor), bound)
+            if step_callback:
+                step_callback(current_node, neighbor, path + [neighbor], self.frontier, False, g + cost, self.h(neighbor), bound)
 
         
         for neighbor in neighbor_list:
@@ -49,7 +48,6 @@ class CUS2(SearchAlgorithms):
                 g + cost, 
                 bound, 
                 path + [neighbor],
-                visited,
                 frontier=self.frontier,
                 step_callback=step_callback
             )
@@ -63,7 +61,6 @@ class CUS2(SearchAlgorithms):
             if isinstance(result, (int, float)) and result < min_excess:
                 min_excess = result
             
-            visited.remove(neighbor)  # Backtrack
             
         return min_excess, None, None
 
@@ -82,14 +79,12 @@ class CUS2(SearchAlgorithms):
             if self.total_generated_nodes != 1:
                 self.total_generated_nodes += 1
             
-            visited = {self.start}
             
             outcome, goal_node, goal_path = self.iterate(
                 self.start, 
                 0.0, 
                 bound, 
                 path,
-                visited,
                 frontier=[self.start],
                 step_callback=step_callback
             )
@@ -110,8 +105,8 @@ class CUS2(SearchAlgorithms):
                             cost += edge_cost
                             break
 
-      
-                step_callback(goal_node, None, goal_path, self.frontier, visited, is_goal, cost, self.h(goal_node), bound)
+                if step_callback:
+                    step_callback(goal_node, None, goal_path, self.frontier,  is_goal, cost, self.h(goal_node), bound)
                 return [self.total_generated_nodes, goal_path, goal_node]
 
             # No solution exists
@@ -122,6 +117,6 @@ class CUS2(SearchAlgorithms):
             bound = outcome
 
             self.frontier = []
-            visited = {}
-
-            step_callback(None, [], self.frontier, visited, False, None, None, bound)
+            
+            if step_callback:
+                step_callback(None, [], self.frontier, False, None, None, bound)
