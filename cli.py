@@ -4,6 +4,9 @@ from dijkstra import CUS1
 from gbfs import GBFS
 from astar import AS
 from idastar import CUS2
+import gc
+import time
+import tracemalloc
 
 class CLI:
     def __init__ (self, file_path, method):
@@ -98,8 +101,18 @@ class CLI:
             searcher = self.algorithm_map[self.method](self.graph)
         except KeyError:
             raise SystemExit(f"Unknown method: {self.method}")
+        
+        gc.collect() # Force garbage collection before starting the timer
+        start_time = time.perf_counter()
+        tracemalloc.start()
 
+        initial_mem = tracemalloc.get_traced_memory()[0]
         number_of_nodes, path, goal = searcher.search() 
+
+        end_time = time.perf_counter()
+        memory_used, peak_mem = tracemalloc.get_traced_memory()
+
+        tracemalloc.stop()
 
         if self.method not in self.algorithm_map:
             raise SystemExit(f"Unknown method: {self.method}")
@@ -107,12 +120,14 @@ class CLI:
 
         if path is None:
             path = "Not found"
-            
+        
         print("Finished execution of search.py")
         print(f"Results: \n\n Filename: {self.file_path} \n Method: {self.algorithm_map[self.method].__name__} \n Goal: {goal} \n Number of Nodes: {number_of_nodes} \n Path: {path}")
 
-    
-        
+        print(f"Total memory usage: {memory_used / 1024} KB")
+        print(f"Peak memory usage: {peak_mem / 1024} KB")
+        print(f"Execution time: {(end_time - start_time) * 1000} milliseconds")
+
        
 
 
