@@ -37,8 +37,8 @@ class CUS2(SearchAlgorithms):
             neighbor_list.append((neighbor, cost))
             self.total_generated_nodes += 1
 
-            if neighbor not in self.frontier:
-                self.frontier.append(neighbor)
+            
+            self.frontier.append(neighbor)
             
             if step_callback:
                 step_callback(current_node, neighbor, path + [neighbor], self.frontier, False, g + cost, self.h(neighbor), bound, False)
